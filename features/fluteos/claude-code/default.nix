@@ -128,6 +128,15 @@ in
       home.file.".claude/settings.json".text = builtins.toJSON {
         "$schema" = "https://json.schemastore.org/claude-code-settings.json";
         tui = "fullscreen";
+        # No in-app agent view (Claude Code's own "fleet": several sessions
+        # multiplexed inside one window, dispatched and replied to from a list).
+        # FluteOS runs its fleet a level up — one real WezTerm window per agent,
+        # launched by fluteos-agent-launch and driven by fluteos-agent-send, so
+        # the compositor, the waybar widget and the agent registry all see it and
+        # anything on the machine can address a session by pane id. The in-app
+        # one is visible only to itself. Same switch as the
+        # CLAUDE_CODE_DISABLE_AGENT_VIEW environment variable.
+        disableAgentView = true;
         # Plain attrset arithmetic, not mkMerge — this is fed straight to
         # builtins.toJSON, where module-system combinators would serialise as
         # garbage rather than merging.
