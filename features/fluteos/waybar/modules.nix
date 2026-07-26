@@ -1,0 +1,197 @@
+# Waybar module configurations.
+#
+# A module is defined only when the feature that installs the binary behind it is
+# enabled — `has` comes from ./default.nix, which owns that mapping. Nothing here
+# may assume an optional program exists: a definition whose `exec` is missing
+# renders as a blank or "?" chip on someone else's bar.
+{ lib, niri-windows, has, terminal }:
+
+let
+  icons = import ./icons.nix;
+
+  # Spawning a TUI needs a terminal, and which terminal that is belongs to the
+  # host (see features.fluteos.waybar.terminal). Every handler built here is
+  # gated on `has.terminal`, so an unconfigured terminal drops the handler
+  # instead of shelling out to a program that may not be installed.
+  joinArgs = parts: lib.concatStringsSep " " (lib.filter (p: p != "") parts);
+  spawn = program: joinArgs [ terminal.command terminal.execFlag program ];
+  # Same, but tags the window with an app-id so compositor rules can match it.
+  spawnAs = appId: program: joinArgs (
+    [ terminal.command ]
+    ++ lib.optionals (terminal.appIdFlag != "") [ terminal.appIdFlag appId ]
+    ++ [ terminal.execFlag program ]
+  );
+
+  # Always available: everything these read comes from the base system.
+  alwaysModules = {
+    clock = {
+      format = "{:%H:%M}";
+      format-alt = "{:%Y-%m-%d %H:%M}";
+      tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
+    };
+
+    cpu = {
+      format = "󰍛 {usage}%";
+      tooltip = true;
+    };
+
+    memory = {
+      format = "󰘚 {}%";
+    };
+
+    battery = {
+      states = {
+        warning = 30;
+        critical = 15;
+      };
+      format = "{icon} {capacity}%";
+      format-charging = "󰂄 {capacity}%";
+      format-plugged = "󰚥 {capacity}%";
+      format-icons = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹" ];
+    };
+
+    # NetworkManager comes with features.base.system, so nmtui-connect is always
+    # there — only the terminal that would host it is optional.
+    network = {
+      format-wifi = "󰤨 {signalStrength}%";
+      format-ethernet = "󰈀 {ipaddr}";
+      format-disconnected = "󰤭 ";
+      tooltip-format = "{ifname}: {ipaddr}/{cidr}";
+    } // lib.optionalAttrs has.terminal {
+      on-click = spawn "bash -c 'sleep 0.1; nmtui-connect'";
+    };
+
+    tray = {
+      spacing = 10;
+    };
+  };
+in
+alwaysModules
+
+# features.base.audio — wpctl is wireplumber's, which comes with the feature.
+// lib.optionalAttrs has.audio {
+  pulseaudio = {
+    format = "{icon} {volume}%";
+    format-muted = "󰝟 ";
+    format-icons = {
+      default = [ "󰕿" "󰖀" "󰕾" ];
+    };
+    on-click = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
+  };
+}
+
+# features.fluteos.workspaces — display name of the focused workspace.
+// lib.optionalAttrs has.workspaces {
+  "custom/workspace-name" = {
+    exec = "fluteos-workspace-display-name";
+    return-type = "json";
+  } // lib.optionalAttrs has.terminal {
+    # The app-id matches the niri window rule that floats the rename prompt.
+    on-click = spawnAs "niri-workspace-rename" "niri-workspace-rename";
+  };
+}
+
+# features.base.niri — the minimap speaks the niri IPC.
+// lib.optionalAttrs has.niri {
+  "cffi/niri-windows" = {
+    module_path = "${niri-windows}/lib/waybar-niri-windows.so";
+    options = {
+      mode = "graphical";
+      show-floating = "never";
+      spacing = 1;
+      minimum-size = 30;
+      icon-minimum-size = 0;
+      rules = icons.titleRules ++ icons.appRules;
+    };
+  };
+}
+
+# features.base.obsidian — task list scripts live with the app.
+// lib.optionalAttrs has.obsidian {
+  "custom/obsidian" = {
+    exec = "obsidian-tasks";
+    return-type = "json";
+    interval = 60;
+    signal = 12;
+    on-click = "obsidian-task-open";
+    on-scroll-up = "obsidian-task-select-prev";
+    on-scroll-down = "obsidian-task-select-next";
+  };
+}
+
+# features.fluteos.claude-usage — token usage plus, when features.fluteos.agents
+# is on, the status of every Claude agent across all workspaces in one chip. The
+# agent half reads a hook-written registry, so the poll only needs to be fast
+# enough to feel live; the usage half is cached behind its own TTL inside the
+# script and is not refetched at this rate.
+# RTMIN+13 forces an immediate redraw (sent by fluteos-ai-usage-toggle).
+// lib.optionalAttrs has.claudeUsage {
+  "custom/claude" = {
+    exec = "fluteos-claude-usage";
+    return-type = "json";
+    interval = 2;
+    signal = 13;
+    on-click = "fluteos-ai-usage-toggle";
+  } // lib.optionalAttrs has.agents {
+    on-click-right = "fluteos-agents-pick";
+  };
+}
+
+# features.fluteos.ptt
+// lib.optionalAttrs has.ptt {
+  "custom/ptt-mode" = {
+    exec = "fluteos-ptt-widget";
+    return-type = "json";
+    interval = "once";
+    signal = 11;
+    on-click = "fluteos-ptt-toggle";
+  };
+}
+
+# features.base.mpd — mpd-status, mpc and ncmpcpp all come with the feature.
+// lib.optionalAttrs has.mpd {
+  "custom/mpd" = {
+    exec = "mpd-status";
+    return-type = "json";
+    interval = 1;
+    on-click = "mpc toggle";
+    on-scroll-up = "mpc next";
+    on-scroll-down = "mpc prev";
+  } // lib.optionalAttrs has.terminal {
+    on-click-right = spawn "ncmpcpp";
+  };
+
+  "custom/mpd-prev" = {
+    format = "󰒮";
+    on-click = "mpc prev";
+    tooltip = false;
+  };
+
+  "custom/mpd-next" = {
+    format = "󰒭";
+    on-click = "mpc next";
+    tooltip = false;
+  };
+}
+
+# features.fluteos.tailnets — shows the active Tailscale tailnet (manual model,
+# no auto-switch). Polled like the other custom modules; click opens the fuzzel
+# switcher, which signals RTMIN+15 to refresh this immediately after switching.
+// lib.optionalAttrs has.tailnets {
+  "custom/tailnet" = {
+    exec = "fluteos-tailnet-watch";
+    return-type = "json";
+    interval = 5;
+    on-click = "fluteos-tailnet-menu";
+    signal = 15;
+  };
+}
+
+# features.fluteos.weather
+// lib.optionalAttrs has.weather {
+  "custom/weather" = {
+    exec = "fluteos-weather";
+    interval = 1800;
+    tooltip = false;
+  };
+}
