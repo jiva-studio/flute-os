@@ -128,6 +128,13 @@ in
           Description = "fluteos which-key menu daemon";
           After = [ "niri-session.target" ];
           Requires = [ "niri-session.target" ];
+          # The workspace menu is an itemsCmd, but the daemon resolves
+          # fluteos-workspaces-list through the PATH it started with — so a
+          # registry written after login is invisible to it. Restart with the
+          # registry rather than at the next login.
+          X-Restart-Triggers =
+            lib.optional (config.features.fluteos.workspaces ? registryPath)
+              config.features.fluteos.workspaces.registryPath;
         };
         Service = {
           ExecCondition = "${pkgs.bash}/bin/bash -c 'test -n \"$WAYLAND_DISPLAY\"'";

@@ -240,7 +240,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    home-manager.users.${config.features.base.system.user.name} = { pkgs, theme, ... }:
+    # `@hm` rather than destructuring `config`: everything above reads the NixOS
+    # config through the outer `config`, and a second one in scope here would
+    # shadow it silently.
+    home-manager.users.${config.features.base.system.user.name} = { pkgs, theme, ... }@hm:
     let
       niri-windows = pkgs.callPackage ./niri-windows.nix { };
       modules = import ./modules.nix {
@@ -292,6 +295,13 @@ in
           Description = "Waybar - Wayland bar for Niri";
           PartOf = [ "niri-session.target" ];
           After = [ "niri-session.target" ];
+          # The workspace chip resolves niri's raw workspace name through the
+          # workspaces registry, which the bar's helper reads once per spawn.
+          # Without this the bar keeps yesterday's registry until the next
+          # login, and a project added today shows up as its raw id.
+          X-Restart-Triggers =
+            lib.optional (hm.config.features.fluteos.workspaces ? registryPath)
+              hm.config.features.fluteos.workspaces.registryPath;
         };
         Service = {
           Type = "simple";

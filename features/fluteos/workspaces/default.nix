@@ -120,6 +120,28 @@ let theme = config.features.fluteos.theme.resolved; in
       '';
     in
     {
+      # The registry path, for the long-running services that read it. They
+      # resolve their helper through PATH once, at start, so a registry that
+      # changed under them stays invisible until they restart: a project added
+      # today would not reach the bar or the menus until the next login. Units
+      # that consume this list it in Unit.X-Restart-Triggers, which makes their
+      # unit file change with the registry and lets sd-switch restart exactly
+      # them on activation.
+      #
+      # Declared through `imports` because the rest of this module is plain
+      # config: mixing an `options` key with bare `home.packages` in one attrset
+      # is what the module system refuses.
+      imports = [
+        ({ lib, ... }: {
+          options.features.fluteos.workspaces.registryPath = lib.mkOption {
+            type = lib.types.str;
+            readOnly = true;
+            description = "Store path of the generated workspaces.json registry.";
+          };
+        })
+      ];
+      features.fluteos.workspaces.registryPath = "${registryFile}";
+
       home.packages = [
         workspaceOpen
         workspacesList
