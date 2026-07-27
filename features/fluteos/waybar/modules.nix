@@ -129,7 +129,11 @@ alwaysModules
   "custom/claude" = {
     exec = "fluteos-claude-usage";
     return-type = "json";
-    interval = 2;
+    # One second, not two: the "an agent is waiting for you" dot blinks by
+    # alternating its colour between polls, and at 2s that reads as a glitch
+    # rather than a blink. The usage half is cached behind its own TTL inside
+    # the script, so this does not refetch anything.
+    interval = 1;
     signal = 13;
     on-click = "fluteos-ai-usage-toggle";
   } // lib.optionalAttrs has.agents {

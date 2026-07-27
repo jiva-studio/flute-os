@@ -53,6 +53,12 @@ in
       agentsWidget = pkgs.writeShellScriptBin "fluteos-agents-widget" ''
         export JQ="${pkgs.jq}/bin/jq"
         export REGISTRY_DIR="${registryDir}"
+        # Dot colours. `ink` and not the plain accents: these are painted ON the
+        # bar chip, whose background is already an accent colour.
+        export COLOR_WAITING="${theme.palette.ink.blue}"
+        export COLOR_WORKING="${theme.palette.ink.green}"
+        export COLOR_IDLE="${theme.palette.ink.neutral}"
+        export COLOR_OFF="${theme.palette.ink.dim}"
         bash ${./fluteos-agents-widget.sh}
       '';
 

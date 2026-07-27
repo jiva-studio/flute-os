@@ -44,4 +44,18 @@
   base = "#1e1e2e";
   mantle = "#181825";
   crust = "#11111b";
+
+  # Ink: accents meant to be drawn ON a chip, not as one.
+  #
+  # Every accent above is a background colour in a dark theme — light by
+  # construction — and a bar chip inverts that: its background is the accent and
+  # its text is `base`. A green dot painted in `green` on a yellow chip is
+  # therefore invisible. These are the same hues from catppuccin's LIGHT flavour
+  # (latte), which is exactly "these colours, dark enough to write with".
+  ink = {
+    blue = "#1e66f5";
+    green = "#40a02b";
+    neutral = "#4c4f69";
+    dim = "#8c8fa1";
+  };
 }

@@ -57,7 +57,11 @@ fi
 ENTRIES=$("$JQ" -s '.' "$REGISTRY_DIR"/*.json 2>/dev/null)
 [ -z "$ENTRIES" ] && ENTRIES="[]"
 
-"$JQ" -nc --argjson a "$ENTRIES" --argjson now "$(date +%s)" '
+"$JQ" -nc --argjson a "$ENTRIES" --argjson now "$(date +%s)" \
+  --arg cWaiting "${COLOR_WAITING:-#89b4fa}" \
+  --arg cWorking "${COLOR_WORKING:-#a6e3a1}" \
+  --arg cIdle    "${COLOR_IDLE:-#cdd6f4}" \
+  --arg cOff     "${COLOR_OFF:-#585b70}" '
   def icon: {working:"󰜎", waiting:"󰀦", idle:"󰅶"}[.] // "󰚩";
   def ago($t): ($now - $t) as $d
     | if   $d < 60    then "\($d)s"
@@ -72,30 +76,34 @@ ENTRIES=$("$JQ" -s '.' "$REGISTRY_DIR"/*.json 2>/dev/null)
   | ($agents | map(select(.status == "waiting")) | length) as $waiting
   | ($agents | length) as $total
 
-  # One dot per state, and only for states that HAVE agents.
+  # Three dots. ALWAYS three, in a fixed order — waiting, working, idle — and a
+  # state with no agents keeps its dot, greyed. The position is what tells you
+  # which state you are looking at, so dropping a dot would shift the others and
+  # make the chip unreadable at a glance.
   #
-  # This used to be three bare numbers in a fixed order, "1/1/5", where the
-  # position carried the whole meaning — unreadable unless you already knew the
-  # order, and the third slot (idle) was routinely mistaken for something
-  # alarming. The shape now says which state it is, so nothing has to be
-  # remembered and empty states can simply be dropped:
+  #   ● blue, blinking   an agent is blocked on YOU
+  #   ● green            agents are working
+  #   ● white            agents are open and idle
+  #   ● grey             nothing in that state
   #
-  #   ◉2   two agents are waiting on YOU        (the chip blinks blue)
-  #   ●3   three are working                    (the chip pulses green)
-  #   ○5   five are open and idle               (chip keeps the usage colour)
+  # No numbers: the chip only has to say whether anything wants you. How many
+  # agents are in each state is what the tooltip is for.
   #
-  # Shape, not only colour: the chip has one background at a time, and a bar is
-  # a bad place to demand colour discrimination.
+  # The blink is a colour swap on alternate seconds, not a CSS animation: this
+  # chip is shared with the usage percentage, and CSS can only animate the whole
+  # chip — which would mean flashing its background.
   | ($total - $waiting - $working) as $idle
-  | ([ (if $waiting > 0 then "◉\($waiting)" else empty end),
-       (if $working > 0 then "●\($working)" else empty end),
-       (if $idle    > 0 then "○\($idle)"    else empty end) ]
-     | join(" ")) as $counts
+  | ([ (if $waiting > 0
+        then (if ($now % 2) == 0 then $cOff else $cWaiting end)
+        else $cOff end),
+       (if $working > 0 then $cWorking else $cOff end),
+       (if $idle    > 0 then $cIdle    else $cOff end) ]
+     | map("<span foreground=\"\(.)\">●</span>") | join(" ")) as $counts
 
   | {
-      compact: (if $total == 0 then "" else $counts end),
+      compact: $counts,
 
-      text: (if $total == 0 then "" else "󰚩 " + $counts end),
+      text: ("󰚩 " + $counts),
 
       tooltip:
         if $total == 0 then "No agents"

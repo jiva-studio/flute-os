@@ -115,40 +115,9 @@ in
     margin: 0;
   }
 
-  /* Claude agents share the usage chip, and they colour it: yellow is the
-     resting state, but an agent that is working or waiting has to be visible
-     from across the room without reading anything.
-
-       working  green,  slow gentle pulse — something is happening, no action
-       waiting  blue,   fast bright blink — an agent is blocked on YOU
-       idle     yellow, static            — the usage chip's own colour
-
-     Animated background rather than coloured glyphs: the chip has exactly one
-     background, and dark text on it is the only combination that stays legible
-     through every frame of an animation. The dot shapes in the text (◉ ● ○)
-     carry the same information for anyone who cannot rely on colour. */
-  @keyframes agents-working {
-    0%   { background: ${theme.palette.yellow}; }
-    50%  { background: ${theme.palette.green}; }
-    100% { background: ${theme.palette.yellow}; }
-  }
-
-  @keyframes agents-waiting {
-    0%   { background: ${theme.palette.blue}; }
-    50%  { background: ${theme.palette.sky}; }
-    100% { background: ${theme.palette.blue}; }
-  }
-
-  #custom-claude.agents-working {
-    animation: agents-working 3s ease-in-out infinite;
-  }
-
-  /* The widget emits the most urgent state only, so these never collide: with
-     one agent waiting and three working the chip is blue, and the text still
-     shows ◉1 ●3. */
-  #custom-claude.agents-waiting {
-    animation: agents-waiting 1s ease-in-out infinite;
-  }
+  /* Claude agents share the usage chip. Its background stays yellow in every
+     state by design — the bar's colours belong to the layout, not to runtime
+     status. Agent state is carried by the coloured dots in the text instead. */
 
   /* PTT Mode widget. Background lives on the base rule, not per-mode, so a new
      mode inherits it instead of rendering as a transparent gap. */
