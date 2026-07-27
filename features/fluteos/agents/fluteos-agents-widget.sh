@@ -5,11 +5,33 @@
 # gone are pruned here rather than by the hook, because a SIGKILLed agent never
 # gets to run SessionEnd — liveness has to be checked by an outside observer.
 #
+#   fluteos-agents-widget              render (waybar calls this)
+#   fluteos-agents-widget --dismiss    clear every "waiting" flag, print nothing
+#
 # Dependencies: JQ, REGISTRY_DIR (required), NIRI (optional) — set via environment
+# Optional: NUDGE_TTL (seconds) — see the ageing pass below.
 
 set -u
 
 mkdir -p "$REGISTRY_DIR"
+
+# Rewrite one entry in place, atomically. A widget refresh must never leave a
+# half-written registry file behind for the next reader.
+downgrade() { # <file> <detail>
+  local f="$1" detail="$2" tmp="$1.$$"
+  "$JQ" --arg d "$detail" '.status = "idle" | .detail = $d' "$f" >"$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$f" || rm -f "$tmp"
+}
+
+# "I have seen all of them, stop blinking." Bound to a click on the chip: the
+# flag means "an agent wants you", and only you can say that it no longer does.
+if [ "${1:-}" = "--dismiss" ]; then
+  for f in "$REGISTRY_DIR"/*.json; do
+    [ -e "$f" ] || continue
+    "$JQ" -e '.status == "waiting"' "$f" >/dev/null 2>&1 && downgrade "$f" "dismissed"
+  done
+  exit 0
+fi
 
 # Prune dead sessions: no live pid -> the agent is gone regardless of what its
 # last hook claimed.
@@ -19,6 +41,22 @@ for f in "$REGISTRY_DIR"/*.json; do
   if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
     rm -f "$f"
   fi
+done
+
+# Age out idle nudges — and ONLY those.
+#
+# Two different things arrive as "waiting": Claude's "I have been quiet for a
+# minute" notification, and a request for permission. The first is a reminder
+# and stops being true on its own; the second is an agent standing still until
+# you answer, and expiring it would leave the bar calm while work is blocked.
+# The hook tells them apart in `.wait`, so only nudges get a shelf life.
+NOW=$(date +%s)
+for f in "$REGISTRY_DIR"/*.json; do
+  [ -e "$f" ] || continue
+  "$JQ" -e --argjson now "$NOW" --argjson ttl "${NUDGE_TTL:-600}" \
+    '.status == "waiting" and (.wait // "nudge") == "nudge"
+     and (($now - (.updated // $now)) > $ttl)' "$f" >/dev/null 2>&1 \
+    && downgrade "$f" "nudge expired"
 done
 
 # Clear "waiting" on the agent you are currently looking at.
@@ -44,13 +82,17 @@ fi
 if [ -n "$FOCUSED" ]; then
   for f in "$REGISTRY_DIR"/*.json; do
     [ -e "$f" ] || continue
-    # .window is stored as a string by the hook, niri reports a number.
+    # .window is stored as a string by the hook, niri reports a number — and it
+    # is matched on its FIRST id, not compared whole. An older hook could write
+    # two ids into that field ("6 7") when one wezterm process owned two
+    # windows, and a whole-string compare can never equal a focused id, so
+    # those agents were unclearable: focus them all day and the chip keeps
+    # blinking. Entries written then are still on disk and outlive the fix.
     "$JQ" -e --arg w "$FOCUSED" \
-      '.status == "waiting" and ((.window // "") | tostring) == $w' \
+      '.status == "waiting"
+       and (((.window // "") | tostring | split(" ") | first // "") == $w)' \
       "$f" >/dev/null 2>&1 || continue
-    tmp="$f.$$"
-    "$JQ" '.status = "idle" | .detail = "seen"' "$f" >"$tmp" 2>/dev/null \
-      && mv -f "$tmp" "$f" || rm -f "$tmp"
+    downgrade "$f" "seen"
   done
 fi
 

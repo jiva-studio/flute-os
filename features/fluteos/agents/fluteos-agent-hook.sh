@@ -71,6 +71,21 @@ esac
 # Keep the registry small — tooltips truncate anyway.
 DETAIL=$(printf '%.140s' "${DETAIL//$'\n'/ }")
 
+# Which kind of "waiting" this is. Both arrive as Notification, and they expire
+# very differently: an idle nudge ("Claude is waiting for your input", sent
+# after a minute of silence) stops being interesting on its own, while a
+# permission request keeps the agent standing still until it is answered. Only
+# the first may be aged out by the widget — see NUDGE_TTL there.
+WAIT=""
+case "$EVENT" in
+  Notification|PermissionRequest)
+    case "$EVENT$DETAIL" in
+      PermissionRequest*|*permission*|*Permission*|*approve*|*Approve*) WAIT="permission" ;;
+      *) WAIT="nudge" ;;
+    esac
+    ;;
+esac
+
 PID="${CLAUDE_PID:-$PPID}"
 
 # --- routing: the pane this session can actually be typed into ---------------
@@ -157,6 +172,12 @@ if [ -z "$WINDOW" ] && [ -n "${NIRI:-}" ]; then
   fi
 fi
 
+# One id, whatever the source. An earlier version of the walk above printed
+# every window of a matching pid, which for one wezterm process owning two
+# windows produced "6 7" — a value that equals no focused window id, so the
+# widget could never clear that agent's "waiting" flag.
+WINDOW=${WINDOW%% *}
+
 # Human-facing name: the workspace this cwd belongs to, else the directory.
 # Resolved once per session and then carried forward from the existing entry —
 # this hook runs on every PreToolUse, so the registry lookup must not be on the
@@ -200,6 +221,7 @@ TMP="$FILE.$$"
   --arg status  "$STATUS" \
   --arg event   "$EVENT" \
   --arg detail  "$DETAIL" \
+  --arg wait    "$WAIT" \
   --arg pane    "$PANE" \
   --arg socket  "$SOCKET" \
   --arg tty     "$TTY" \
@@ -208,7 +230,7 @@ TMP="$FILE.$$"
   --arg pid     "$PID" \
   --argjson ts  "$(date +%s)" \
   '{id:$id, session:$session, name:$name, cwd:$cwd, status:$status, event:$event,
-    detail:$detail, pane:$pane, socket:$socket, tty:$tty, routed:$routed,
+    detail:$detail, wait:$wait, pane:$pane, socket:$socket, tty:$tty, routed:$routed,
     window:$window, pid:$pid, updated:$ts,
     # Derived, not stated: an agent is reachable exactly when a pane and the
     # mux that owns it are both known. Consumers must not re-derive this.

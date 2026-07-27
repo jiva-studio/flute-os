@@ -138,6 +138,9 @@ alwaysModules
     on-click = "fluteos-ai-usage-toggle";
   } // lib.optionalAttrs has.agents {
     on-click-right = "fluteos-agents-pick";
+    # "Seen them all, stop blinking." Focusing an agent's window clears its own
+    # flag; this clears the lot, for when you looked and had nothing to add.
+    on-click-middle = "fluteos-agents-widget --dismiss";
   };
 }
 
