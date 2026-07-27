@@ -71,11 +71,62 @@ esac
 # Keep the registry small — tooltips truncate anyway.
 DETAIL=$(printf '%.140s' "${DETAIL//$'\n'/ }")
 
-# Routing keys, inherited from the environment of the claude process:
-#   WEZTERM_PANE — the pane to send text into (set by wezterm per pane)
-#   CLAUDE_PID   — the claude process, used by the widget for liveness
-PANE="${WEZTERM_PANE:-}"
 PID="${CLAUDE_PID:-$PPID}"
+
+# --- routing: the pane this session can actually be typed into ---------------
+#
+# NOT $WEZTERM_PANE. That variable is inherited like any other, so a session
+# started from inside another agent's Bash carries its PARENT's pane id, and
+# text addressed here lands in somebody else's conversation. Worse, pane ids
+# are per-mux-server, and fluteos-agent-launch starts every window with
+# --always-new-process: three agents can all legitimately be "pane 0".
+#
+# So derive it from something the process cannot inherit — its own controlling
+# terminal — and record the socket that owns it:
+#   tpgid > 0 and pgrp == tpgid  → this process is the FOREGROUND program of a
+#                                  controlling tty, i.e. it owns a pane
+#   tpgid == -1                  → no controlling tty (a background job, an SDK
+#                                  session): no pane exists, and saying
+#                                  otherwise is how messages get misrouted
+# then match that tty against wezterm's own pane list (`tty_name`).
+#
+# Resolved ONCE per session and carried forward: this hook runs on every
+# PreToolUse and `wezterm cli list` has no business on that path.
+PANE=""; SOCKET=""; TTY=""; ROUTED=""
+if [ -f "$FILE" ]; then
+  eval "$("$JQ" -r '@sh "ROUTED=\(.routed // "") PANE=\(.pane // "") SOCKET=\(.socket // "") TTY=\(.tty // "")"' "$FILE" 2>/dev/null)"
+fi
+
+if [ -z "$ROUTED" ]; then
+  ROUTED="1"
+  # /proc/<pid>/stat, parsed after the last ")" — the comm field can contain
+  # spaces and parentheses, which shifts every column when split naively.
+  STAT=$(cat "/proc/$PID/stat" 2>/dev/null)
+  STAT=${STAT#*") "}
+  # after the strip: 1 state, 2 ppid, 3 pgrp, 4 session, 5 tty_nr, 6 tpgid
+  # shellcheck disable=SC2086
+  set -- $STAT
+  PGRP="${3:-0}"; TPGID="${6:--1}"
+
+  if [ "$TPGID" -gt 0 ] 2>/dev/null && [ "$PGRP" = "$TPGID" ]; then
+    for fd in 0 1 2; do
+      link=$(readlink "/proc/$PID/fd/$fd" 2>/dev/null)
+      case "$link" in /dev/pts/*) TTY="$link"; break ;; esac
+    done
+  fi
+
+  if [ -n "$TTY" ] && [ -n "${WEZTERM:-}" ]; then
+    # The env socket first (right in the common case, one call), then every
+    # other live mux — a pane's tty is unique across all of them, so the first
+    # hit is the answer and there is nothing to disambiguate.
+    for sock in "${WEZTERM_UNIX_SOCKET:-}" "$XDG_RUNTIME_DIR"/wezterm/gui-sock-*; do
+      [ -n "$sock" ] && [ -e "$sock" ] || continue
+      hit=$(WEZTERM_UNIX_SOCKET="$sock" "$WEZTERM" cli list --format json 2>/dev/null \
+        | "$JQ" -r --arg t "$TTY" 'first(.[] | select(.tty_name == $t) | .pane_id) // empty' 2>/dev/null)
+      if [ -n "$hit" ]; then PANE="$hit"; SOCKET="$sock"; break; fi
+    done
+  fi
+fi
 
 # The niri window that hosts this agent. NIRI_WINDOW_ID is set by the fish
 # init, but only reaches sessions launched through an interactive fish — for
@@ -122,8 +173,27 @@ if [ -z "$NAME" ] && [ -n "$CWD" ] && [ -n "${WORKSPACE_REGISTRY_CMD:-}" ]; then
 fi
 [ -z "$NAME" ] && NAME=$(basename "${CWD:-agent}")
 
+# Short handle to address this agent by. The session id is unique and never
+# reused, so its prefix inherits both properties; four characters are enough to
+# type and long enough that a clash needs 65k concurrent agents. On a clash
+# with a DIFFERENT session the full id is used instead of picking a winner.
+ID=""
+[ -f "$FILE" ] && ID=$("$JQ" -r '.id // empty' "$FILE" 2>/dev/null)
+if [ -z "$ID" ]; then
+  ID="${SESSION:0:4}"
+  for other in "$REGISTRY_DIR"/*.json; do
+    [ -e "$other" ] || continue
+    [ "$other" = "$FILE" ] && continue
+    if [ "$("$JQ" -r '.id // empty' "$other" 2>/dev/null)" = "$ID" ]; then
+      ID="$SESSION"
+      break
+    fi
+  done
+fi
+
 TMP="$FILE.$$"
 "$JQ" -n \
+  --arg id      "$ID" \
   --arg session "$SESSION" \
   --arg name    "$NAME" \
   --arg cwd     "$CWD" \
@@ -131,11 +201,18 @@ TMP="$FILE.$$"
   --arg event   "$EVENT" \
   --arg detail  "$DETAIL" \
   --arg pane    "$PANE" \
+  --arg socket  "$SOCKET" \
+  --arg tty     "$TTY" \
+  --arg routed  "$ROUTED" \
   --arg window  "$WINDOW" \
   --arg pid     "$PID" \
   --argjson ts  "$(date +%s)" \
-  '{session:$session, name:$name, cwd:$cwd, status:$status, event:$event,
-    detail:$detail, pane:$pane, window:$window, pid:$pid, updated:$ts}' \
+  '{id:$id, session:$session, name:$name, cwd:$cwd, status:$status, event:$event,
+    detail:$detail, pane:$pane, socket:$socket, tty:$tty, routed:$routed,
+    window:$window, pid:$pid, updated:$ts,
+    # Derived, not stated: an agent is reachable exactly when a pane and the
+    # mux that owns it are both known. Consumers must not re-derive this.
+    reachable: (($pane != "") and ($socket != ""))}' \
   >"$TMP" 2>/dev/null && mv -f "$TMP" "$FILE"
 
 exit 0

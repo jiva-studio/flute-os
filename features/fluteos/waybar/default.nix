@@ -295,12 +295,16 @@ in
           Description = "Waybar - Wayland bar for Niri";
           PartOf = [ "niri-session.target" ];
           After = [ "niri-session.target" ];
-          # The workspace chip resolves niri's raw workspace name through the
-          # workspaces registry, which the bar's helper reads once per spawn.
-          # Without this the bar keeps yesterday's registry until the next
-          # login, and a project added today shows up as its raw id.
-          X-Restart-Triggers =
-            lib.optional (hm.config.features.fluteos.workspaces ? registryPath)
+          # Waybar reads its config, its stylesheet and — through the workspace
+          # chip's helper — the workspaces registry exactly once, when it
+          # starts. None of that is in the unit, so without naming the files
+          # here a rebuild leaves the running bar on yesterday's data: a project
+          # added today shows up as its raw `group:project` id, and a restyled
+          # chip does not change at all until the next login.
+          X-Restart-Triggers = [
+            "${hm.config.xdg.configFile."waybar/config".source}"
+            "${hm.config.xdg.configFile."waybar/style.css".source}"
+          ] ++ lib.optional (hm.config.features.fluteos.workspaces ? registryPath)
               hm.config.features.fluteos.workspaces.registryPath;
         };
         Service = {

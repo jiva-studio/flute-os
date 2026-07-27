@@ -32,9 +32,22 @@ in
       agentHook = pkgs.writeShellScriptBin "fluteos-agent-hook" ''
         export JQ="${pkgs.jq}/bin/jq"
         export NIRI="${pkgs.niri}/bin/niri"
+        # Used once per session to find which pane owns this session's terminal;
+        # never on the per-tool-call path.
+        export WEZTERM="${pkgs.wezterm}/bin/wezterm"
         export REGISTRY_DIR="${registryDir}"
         export WORKSPACE_REGISTRY_CMD="fluteos-workspaces-registry-path"
         bash ${./fluteos-agent-hook.sh} "$@"
+      '';
+
+      # The fleet as a command: what is running, in what state, and which id to
+      # address it by. Without it every caller — the user at a prompt, or an
+      # agent orchestrating others — has to hand-roll jq over the registry.
+      agentList = pkgs.writeShellScriptBin "fluteos-agent-list" ''
+        export JQ="${pkgs.jq}/bin/jq"
+        export REGISTRY_DIR="${registryDir}"
+        export PATH="${pkgs.util-linux}/bin:$PATH"   # column
+        bash ${./fluteos-agent-list.sh} "$@"
       '';
 
       agentsWidget = pkgs.writeShellScriptBin "fluteos-agents-widget" ''
@@ -90,7 +103,7 @@ in
       # claude-code/default.nix wires the hook in by bare name, resolved from
       # PATH — cross-module store-path plumbing isn't worth it for a script
       # that is always installed alongside it.
-      home.packages = [ agentHook agentsWidget agentSend agentsPick agentCommand ];
+      home.packages = [ agentHook agentList agentsWidget agentSend agentsPick agentCommand ];
     };
   };
 }

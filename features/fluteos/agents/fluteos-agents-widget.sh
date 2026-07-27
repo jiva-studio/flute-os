@@ -72,13 +72,25 @@ ENTRIES=$("$JQ" -s '.' "$REGISTRY_DIR"/*.json 2>/dev/null)
   | ($agents | map(select(.status == "waiting")) | length) as $waiting
   | ($agents | length) as $total
 
-  # Bare numbers in a FIXED order — working/waiting/idle — joined by slashes.
-  # No per-status icons: the chip sits next to the usage percentage and the
-  # glyphs made it read as noise. Position carries the meaning, so all three
-  # slots are always printed; dropping zeroes would make "2/1" ambiguous.
-  # No leading robot icon either — the merged claude widget already draws one.
+  # One dot per state, and only for states that HAVE agents.
+  #
+  # This used to be three bare numbers in a fixed order, "1/1/5", where the
+  # position carried the whole meaning — unreadable unless you already knew the
+  # order, and the third slot (idle) was routinely mistaken for something
+  # alarming. The shape now says which state it is, so nothing has to be
+  # remembered and empty states can simply be dropped:
+  #
+  #   ◉2   two agents are waiting on YOU        (the chip blinks blue)
+  #   ●3   three are working                    (the chip pulses green)
+  #   ○5   five are open and idle               (chip keeps the usage colour)
+  #
+  # Shape, not only colour: the chip has one background at a time, and a bar is
+  # a bad place to demand colour discrimination.
   | ($total - $waiting - $working) as $idle
-  | "\($working)/\($waiting)/\($idle)" as $counts
+  | ([ (if $waiting > 0 then "◉\($waiting)" else empty end),
+       (if $working > 0 then "●\($working)" else empty end),
+       (if $idle    > 0 then "○\($idle)"    else empty end) ]
+     | join(" ")) as $counts
 
   | {
       compact: (if $total == 0 then "" else $counts end),

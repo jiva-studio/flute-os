@@ -15,20 +15,45 @@ There is **no supported IPC** into a live interactive Claude session, so
 "sending a message" means driving the TUI: type keystrokes into the agent's
 WezTerm pane, then a bare Enter to submit.
 
-## The registry
+## The registry — `fluteos-agent-list`
 
-Every running agent registers itself (via the `fluteos-agent-hook` Stop/Start
-hooks) as one JSON file in `~/.cache/fluteos/agents/*.json`. Fields:
+**Start here, always.** One command answers "who is running, in what state, and
+what do I address them by":
 
+```bash
+fluteos-agent-list            # human table
+fluteos-agent-list --json     # the same as JSON — use this one
+```
+
+```
+ID    STATUS   AGE  WHERE    NAME                     DOING
+b9be  waiting  2m   pane 2   Aviso                    Claude is waiting for your input
+20d1  working  8s   pane 1   Aviso                    Edit: src/app.ts
+17c3  idle     1h   no pane  Jiva Studio : Lectorium  replied, waiting
+```
+
+Every running agent registers itself through the `fluteos-agent-hook` hooks as
+one JSON file in `~/.cache/fluteos/agents/*.json`; the command prunes entries
+whose process is gone (a SIGKILLed agent never runs SessionEnd). Fields:
+
+- `id` — **the handle. Address agents by this.** Short prefix of the session id,
+  unique and never reused.
 - `name` — display name = the **project** the agent runs in (e.g. `Aviso`).
-  Several agents in the same project therefore share a name.
-- `session` — Claude session UUID (unique per agent).
-- `pane` — WezTerm pane id — **this is what you send/read through**.
-- `window` — WezTerm window id (for focusing via niri).
-- `cwd`, `status` (`working`|`idle`|…), `pid`, `updated`.
+  Several agents in the same project share it, so a name is not an address.
+- `session` — Claude session UUID; also names the transcript under
+  `~/.claude/projects/`.
+- `pane` + `socket` — WezTerm pane and the mux server that owns it. **Both** are
+  needed: agent windows are launched with `--always-new-process`, so pane ids
+  repeat across windows and a bare pane id can address the wrong agent.
+- `reachable` — false when the session has no controlling terminal (a background
+  job, an SDK run). Such an agent is real and reports status, but there is no
+  pane to type into, and `fluteos-agent-send` will refuse.
+- `window` (niri, for focusing), `cwd`, `status` (`working`|`waiting`|`idle`),
+  `pid`, `updated`.
 
-Inspect: `jq -s '[.[]|{name,session,pane,window,status,cwd}]' ~/.cache/fluteos/agents/*.json`
-Or ask WezTerm directly: `wezterm cli list`.
+Do not hand-roll `jq` over the registry directory, and do not read `pane` from
+your own environment: `$WEZTERM_PANE` is inherited, so a session started from
+inside another agent's Bash carries its **parent's** pane id.
 
 ## Launch an agent — `fluteos-agent-launch`
 
@@ -53,38 +78,52 @@ fluteos-agent-launch "Scratch"
 - Omit `--workspace` to use the focused niri workspace. Never launch more than
   ~3–4 at once (they tile to columns).
 
-⚠️ **`fluteos-agent-launch` runs `wezterm start --always-new-process` — every
-agent it starts is its OWN wezterm process with its OWN mux. Your `wezterm cli`
-(and `fluteos-agent-send`) only see YOUR mux, so a launched agent is invisible
-from here: it registers as `pane: "0"` and you can NOT send to it or read it
-back.** The `--prompt` at launch is the ONLY message you can ever deliver to it.
-In practice you almost always end up sending an agent more messages, so this is
-the wrong default — **default to the raw-spawn-in-your-mux path below**, which
-keeps every agent addressable. Reserve `fluteos-agent-launch` for a genuinely
-fire-and-forget agent, or one only the human at the keyboard will drive.
+`fluteos-agent-launch` runs `wezterm start --always-new-process`, so each agent
+is its own wezterm process with its own mux — but that no longer makes it
+unreachable. The registry records the **socket** next to the pane, and
+`fluteos-agent-send` addresses that socket, so a launched agent takes messages
+like any other. Launch it, then drive it by `id`.
 
 ## Send a message — `fluteos-agent-send`
 
 Types text into a running agent's pane and presses Enter, **without stealing
-focus**. Matches the agent by case-insensitive substring of its `name` or `cwd`.
+focus**. Takes an `id` from `fluteos-agent-list` — or, if nothing answers to that
+id, a case-insensitive substring of `name`/`cwd`.
 
 ```sh
-fluteos-agent-send widgets "run the tests and show me the result"
-fluteos-agent-send --pick "draft the PR description"   # choose via fuzzel
+fluteos-agent-send b9be "run the tests and show me the result"   # ← do this
+fluteos-agent-send widgets "…"                        # name, when it is unique
+fluteos-agent-send --pick "draft the PR description"  # human picks via fuzzel
 ```
 
-Ambiguity is a hard error (won't guess between two matches). Since same-project
-agents share a `name`, `fluteos-agent-send Aviso …` fails when >1 Aviso agent is
-up — use the **raw pane** path below for those.
+**Address by `id`.** Names are project display names, so three agents in one
+project are all called `Aviso`; a name that matches several is a hard error
+rather than a coin flip, and the error prints the candidate ids to retry with:
 
-## Several agents in the same project → drive panes directly
+```
+“aviso” matches several — address one by id: b9be (Aviso, waiting); 20d1 (Aviso, working)
+```
 
-**This is the default way to run agents you orchestrate.** You will keep sending
-them messages, so spawn them **in your own mux** with `wezterm cli spawn` and
-keep each pane id — that list is your only handle on the fleet. (`fluteos-agent-launch`
-would put each in a separate mux at `pane: "0"`, unreachable from here, and
-`fluteos-agent-send` can't tell same-`name` agents apart anyway — there is no
-way to recover an addressable handle after the fact, so capture pane ids now.)
+An agent with `no pane` (see `reachable` above) cannot be typed into at all —
+`--prompt` at launch was its only inbox.
+
+## Driving panes directly
+
+`fluteos-agent-list` + `fluteos-agent-send <id>` covers launching and messaging,
+including several agents in one project. Go one level down only when you need
+something the registry does not do — above all **reading a reply back**, which
+has no `fluteos-` command:
+
+```sh
+SOCK=$(fluteos-agent-list --json | jq -r '.[] | select(.id=="b9be") | .socket')
+PANE=$(fluteos-agent-list --json | jq -r '.[] | select(.id=="b9be") | .pane')
+WEZTERM_UNIX_SOCKET=$SOCK wezterm cli get-text --pane-id "$PANE" | tail -30
+```
+
+Always carry the socket with the pane id. Without it `wezterm cli` talks to
+whichever mux your own environment points at, where pane 5 is somebody else's
+agent. The alternative — spawning agents in your own mux — keeps one pane-id
+space, at the cost of every agent dying with your terminal:
 
 ```sh
 # 1) spawn — set the title INSIDE the pane's shell before exec'ing claude, then
@@ -135,10 +174,10 @@ title: spawn `claude` under `fish -i -C "set-tab-title '…'; claude"`.
 
 | want | command |
 |------|---------|
-| list running agents | `jq -s '[.[]\|{name,pane,status}]' ~/.cache/fluteos/agents/*.json` / `wezterm cli list` |
+| list running agents | `fluteos-agent-list --json` (human: `fluteos-agent-list`) |
 | launch in a project | `fluteos-agent-launch --workspace <g:p> --title <T> --prompt "<task>"` |
-| message by name | `fluteos-agent-send <name\|cwd-fragment> "<text>"` |
-| message a specific pane | `printf '%s' "<t>" \| wezterm cli send-text --pane-id <id> --no-paste; sleep 1; printf '\r' \| wezterm cli send-text --pane-id <id> --no-paste` |
+| message an agent | `fluteos-agent-send <id> "<text>"` — id from the list |
+| message a specific pane | `WEZTERM_UNIX_SOCKET=<socket> wezterm cli send-text --pane-id <id> --no-paste`, then the same with `printf '\r'` |
 | set a title | spawn `-- fish -i -C "set-tab-title '<T>'; claude"` (NOT `wezterm cli set-tab-title` — it's ignored by format-tab-title) |
-| read a reply | `wezterm cli get-text --pane-id <id> \| tail -n 40` |
+| read a reply | `WEZTERM_UNIX_SOCKET=<socket> wezterm cli get-text --pane-id <pane> \| tail -n 40` |
 | focus an agent window | `niri msg action focus-window --id <window>` |
