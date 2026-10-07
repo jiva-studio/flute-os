@@ -70,6 +70,7 @@ fi
 PANE=$("$JQ" -r '.[0].pane'   <<<"$MATCHES")
 SOCKET=$("$JQ" -r '.[0].socket' <<<"$MATCHES")
 NAME=$("$JQ" -r '.[0].name'   <<<"$MATCHES")
+TTY=$("$JQ" -r '.[0].tty // ""' <<<"$MATCHES")
 
 [ -z "$PANE" ] || [ "$PANE" = "null" ] && die "agent has no pane id"
 [ -z "$SOCKET" ] || [ "$SOCKET" = "null" ] && die "agent has no mux socket"
@@ -78,6 +79,20 @@ NAME=$("$JQ" -r '.[0].name'   <<<"$MATCHES")
 # happens to have inherited: fluteos-agent-launch starts every agent window
 # with --always-new-process, so pane ids repeat across windows.
 export WEZTERM_UNIX_SOCKET="$SOCKET"
+
+# Confirm the pane is still the one the hook resolved, by the tty it was
+# matched on. Routing is resolved once per session and then carried forward for
+# the life of the entry, so a pane that was closed — or a mux that was
+# restarted and handed the same small integer to somebody else — leaves a
+# perfectly valid-looking id behind. Typing into it would deliver the message
+# to whoever is sitting there now, which is the exact failure this whole
+# socket+pane scheme exists to prevent. One extra call, on a path that is not
+# hot.
+if [ -n "$TTY" ]; then
+  LIVE=$("$WEZTERM" cli list --format json 2>/dev/null \
+    | "$JQ" -r --argjson p "$PANE" 'first(.[] | select(.pane_id == $p) | .tty_name) // empty' 2>/dev/null)
+  [ "$LIVE" = "$TTY" ] || die "“$NAME” is no longer at pane $PANE — its window is gone or was replaced"
+fi
 
 # Two calls on purpose: --no-paste types the text as keystrokes (bracketed
 # paste can be swallowed by the TUI), then a bare CR submits it.

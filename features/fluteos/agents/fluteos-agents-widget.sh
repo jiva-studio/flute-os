@@ -33,6 +33,13 @@ if [ "${1:-}" = "--dismiss" ]; then
   exit 0
 fi
 
+# Sweep leftover temp files from downgrade(). It writes "<entry>.$$" and
+# renames, so a crash between the two leaves a stray behind — and since the
+# prune loop below only globs *.json, those accumulated forever (the oldest
+# found in the wild was three months old). Anything still being written is
+# newer than a minute and is left alone.
+find "$REGISTRY_DIR" -maxdepth 1 -name '*.json.*' -type f -mmin +1 -delete 2>/dev/null
+
 # Prune dead sessions: no live pid -> the agent is gone regardless of what its
 # last hook claimed.
 for f in "$REGISTRY_DIR"/*.json; do
@@ -67,14 +74,26 @@ done
 # Focus is the missing signal — if its niri window is focused right now, the
 # notification has served its purpose and the flag is stale by definition.
 #
+# NUDGES ONLY, for the same reason the ageing pass above is nudges only:
+# looking at a permission prompt is not answering it. Clearing that flag on
+# focus leaves the bar calm while the agent stands still, and since nothing
+# re-sends the notification it would never light up again. A permission wait
+# ends when the agent moves — the next PreToolUse overwrites it — or when you
+# explicitly say you have seen it (--dismiss).
+#
 # The downgrade is written back to the registry, not just applied to this
 # render: the next poll re-reads these files, so an in-memory fix would flip
 # straight back to waiting.
 #
 # NIRI is optional. Without it the check is skipped and the widget behaves
 # exactly as before — no hard dependency on the compositor being reachable.
+# The call is also skipped when nothing is waiting: this runs once a second,
+# and spawning a compositor query per poll to answer "nothing to clear" is a
+# process a second for no result.
 FOCUSED=""
-if [ -n "${NIRI:-}" ]; then
+if [ -n "${NIRI:-}" ] && \
+   "$JQ" -se 'any(.[]; .status == "waiting" and (.wait // "nudge") == "nudge")' \
+     "$REGISTRY_DIR"/*.json >/dev/null 2>&1; then
   FOCUSED=$("$NIRI" msg --json windows 2>/dev/null \
     | "$JQ" -r 'first(.[] | select(.is_focused) | .id) // empty' 2>/dev/null)
 fi
@@ -89,7 +108,7 @@ if [ -n "$FOCUSED" ]; then
     # those agents were unclearable: focus them all day and the chip keeps
     # blinking. Entries written then are still on disk and outlive the fix.
     "$JQ" -e --arg w "$FOCUSED" \
-      '.status == "waiting"
+      '.status == "waiting" and (.wait // "nudge") == "nudge"
        and (((.window // "") | tostring | split(" ") | first // "") == $w)' \
       "$f" >/dev/null 2>&1 || continue
     downgrade "$f" "seen"
@@ -145,7 +164,11 @@ ENTRIES=$("$JQ" -s '.' "$REGISTRY_DIR"/*.json 2>/dev/null)
   | {
       compact: $counts,
 
-      text: ("󰚩 " + $counts),
+      # No glyph. This half of the chip used to lead with a robot, which said
+      # "Claude" on a bar that now reports five providers and agents from
+      # several of them — an icon that names one vendor is worse than none.
+      # The provider labels ahead of these dots carry the identity.
+      text: $counts,
 
       tooltip:
         if $total == 0 then "No agents"

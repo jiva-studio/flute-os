@@ -120,6 +120,11 @@ ${REPO_LIST}
    - Auto-blocks wrapped in \`<!-- BEGIN AUTOGEN -->\` / \`<!-- END AUTOGEN -->\` — only edit inside on regen.
 4. **When serving/showing docs**, use the \`docs-serve\` and \`docs-open\` skills.
 5. **Project-local skills** live in \`./.claude/skills/\`. Add new ones with the \`fluteos-agent-skill-new\` skill (namespace-action format: \`docs-foo\`, \`repo-bar\`, \`db-baz\`).
+6. **Git lives in the repos, not here.** This directory is not a git working
+   tree, so anything that reads a diff — \`git\`, \`revdiff\`, a review skill —
+   must be pointed at \`../source/<repo>/\` (run it there, or pass that path).
+   Claude Code's own \`/diff\` panel reads the current directory only and stays
+   empty in this workspace; that is the layout, not a fault. \`/diff\` hides it.
 
 ## Quick commands
 

@@ -52,6 +52,10 @@ in
 
       agentsWidget = pkgs.writeShellScriptBin "fluteos-agents-widget" ''
         export JQ="${pkgs.jq}/bin/jq"
+        # Without this the widget's focus check silently no-ops (it treats NIRI
+        # as optional), and the blue dot then has no way to stop blinking short
+        # of a middle click — which is exactly what it did.
+        export NIRI="${pkgs.niri}/bin/niri"
         export REGISTRY_DIR="${registryDir}"
         # Dot colours. `ink` and not the plain accents: these are painted ON the
         # bar chip, whose background is already an accent colour.

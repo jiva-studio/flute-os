@@ -1,8 +1,100 @@
 { lib, config, ... }:
-let theme = config.features.fluteos.theme.resolved; in
+let
+  theme = config.features.fluteos.theme.resolved;
+  # The home-manager submodule below shadows `config` with its own, so the
+  # NixOS-level options have to be captured out here.
+  nixosCfg = config;
+
+  # One entry of the agent catalogue: what the picker offers on the agent
+  # keybinding. An agent is a command plus the environment it needs, so the same
+  # binary can appear several times under different backends — Claude on the
+  # subscription, Claude against an Anthropic-compatible gateway, opencode on
+  # whichever provider — without this module knowing any of them by name.
+  profileType = lib.types.submodule ({ name, ... }: {
+    options = {
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = name;
+        description = "Display name in the agent picker. Defaults to the attribute key.";
+      };
+      icon = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Nerd Font glyph shown before the name.";
+      };
+      command = lib.mkOption {
+        type = lib.types.str;
+        example = "claude --model opus";
+        description = ''
+          The command line to run, as fish sees it: a binary and optionally its
+          arguments. Run under `direnv exec <agentDir>`, so the project's own
+          environment still applies.
+        '';
+      };
+      order = lib.mkOption {
+        type = lib.types.int;
+        default = 50;
+        description = "Sort key in the picker; ties break on display name.";
+      };
+      env = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        example = { ANTHROPIC_BASE_URL = "https://example.invalid/anthropic"; };
+        description = ''
+          Environment exported before the agent starts. For values that are not
+          secret — endpoints, timeouts, a per-profile CLAUDE_CONFIG_DIR.
+        '';
+      };
+      envFiles = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        example = { ANTHROPIC_AUTH_TOKEN = "/home/you/secrets/zai.key"; };
+        description = ''
+          Environment whose value is the contents of a file, read at launch and
+          stripped of surrounding whitespace. This is where API keys go: only the
+          path reaches /nix/store, never the key. A path that cannot be read is
+          skipped, and the agent starts without that variable — which surfaces as
+          the provider's own auth error rather than an eval failure here.
+        '';
+      };
+    };
+  });
+in
 {
   options.features.fluteos.workspaces = {
     enable = lib.mkEnableOption "Unified workspace open / browser routing";
+
+    agentProfiles = lib.mkOption {
+      type = lib.types.attrsOf profileType;
+      default = {
+        claude = { name = "Claude"; icon = "󰚩"; command = "claude"; order = 10; };
+        opencode = { name = "OpenCode"; icon = "󰭹"; command = "opencode"; order = 20; };
+      };
+      example = lib.literalExpression ''
+        {
+          claude.command = "claude";
+          claude-glm = {
+            name = "Claude + GLM";
+            command = "claude";
+            env.ANTHROPIC_BASE_URL = "https://api.z.ai/api/anthropic";
+            envFiles.ANTHROPIC_AUTH_TOKEN = "/home/you/secrets/zai.key";
+          };
+        }
+      '';
+      description = ''
+        The agent catalogue the picker offers. Setting this REPLACES the default
+        pair rather than adding to it, so list every profile you want — including
+        plain `claude`.
+
+        Which backends are worth having is taste and it dates fast (a gateway
+        renames a model, a subscription ends), so the product ships only the two
+        agents it knows how to install and no opinion about anyone's providers.
+
+        A profile chosen here overrides the workspace's own `agentCommand` for
+        that launch; picking nothing falls back to it, so the voice router and
+        `fluteos-agent-launch --workspace` keep working unchanged.
+      '';
+    };
   };
 
   config = lib.mkIf config.features.fluteos.workspaces.enable {
@@ -55,6 +147,13 @@ let theme = config.features.fluteos.theme.resolved; in
 
       registryFile = pkgs.writeText "workspaces.json" (builtins.toJSON registryAttrs);
 
+      # The agent catalogue, as the picker and the launcher read it. Keyed by
+      # profile id; `command` is a fish command line, `env` and `envFiles` are
+      # applied before it runs (the latter by reading the file at launch, so no
+      # key is ever written into the store).
+      profilesFile = pkgs.writeText "agent-profiles.json"
+        (builtins.toJSON nixosCfg.features.fluteos.workspaces.agentProfiles);
+
       workspaceOpen = pkgs.writeShellScriptBin "fluteos-workspace-open" ''
         export JQ="${pkgs.jq}/bin/jq"
         export NIRI="${pkgs.niri}/bin/niri"
@@ -99,6 +198,7 @@ let theme = config.features.fluteos.theme.resolved; in
         export NIRI="${pkgs.niri}/bin/niri"
         export WEZTERM="${pkgs.wezterm}/bin/wezterm"
         export REGISTRY="${registryFile}"
+        export PROFILES="${profilesFile}"
         bash ${./fluteos-agent-launch.sh} "$@"
       '';
 
@@ -111,6 +211,8 @@ let theme = config.features.fluteos.theme.resolved; in
 
       agentPrompt = pkgs.writeShellScriptBin "fluteos-agent-prompt" ''
         export FUZZEL="${pkgs.fuzzel}/bin/fuzzel"
+        export JQ="${pkgs.jq}/bin/jq"
+        export PROFILES="${profilesFile}"
         ${theme.fuzzel.env}bash ${./fluteos-agent-prompt.sh}
       '';
 
