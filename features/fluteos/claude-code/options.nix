@@ -89,6 +89,47 @@ in
       '';
     };
 
+
+    marketplaces = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule {
+        freeformType = lib.types.anything;
+        options.source = lib.mkOption {
+          type = lib.types.anything;
+          example = lib.literalExpression ''{ source = "github"; repo = "owner/repo"; }'';
+          description = "Marketplace source, in Claude Code's own shape — a github repo, a git url, or a local path.";
+        };
+      });
+      default = { };
+      example = lib.literalExpression ''
+        {
+          revdiff = {
+            source = { source = "github"; repo = "umputun/revdiff"; };
+            autoUpdate = true;
+          };
+        }
+      '';
+      description = ''
+        Plugin marketplaces registered in ~/.claude/settings.json
+        (`extraKnownMarketplaces`), keyed by marketplace name. Freeform, so any
+        key Claude Code understands on an entry — `autoUpdate` and whatever
+        follows it — passes through without this module tracking its schema.
+
+        Registering a marketplace only makes its catalogue known; enabling one of
+        its plugins is `plugins` below, and a plugin from an external source is
+        still fetched by `claude plugin install` on first use.
+      '';
+    };
+
+    plugins = lib.mkOption {
+      type = lib.types.attrsOf lib.types.bool;
+      default = { };
+      example = lib.literalExpression ''{ "revdiff@revdiff" = true; }'';
+      description = ''
+        Plugins to enable or disable, keyed `<plugin>@<marketplace>`, written to
+        `enabledPlugins`. A marketplace they come from must be in `marketplaces`
+        above, or Claude Code has nowhere to look them up.
+      '';
+    };
     secretsDir = lib.mkOption {
       type = lib.types.str;
       default = "$HOME/.config/fluteos/secrets";

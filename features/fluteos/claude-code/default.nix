@@ -125,66 +125,6 @@ in
         '')
       ];
 
-      home.file.".claude/settings.json".text = builtins.toJSON {
-        "$schema" = "https://json.schemastore.org/claude-code-settings.json";
-        tui = "fullscreen";
-        # No in-app agent view (Claude Code's own "fleet": several sessions
-        # multiplexed inside one window, dispatched and replied to from a list).
-        # FluteOS runs its fleet a level up — one real WezTerm window per agent,
-        # launched by fluteos-agent-launch and driven by fluteos-agent-send, so
-        # the compositor, the waybar widget and the agent registry all see it and
-        # anything on the machine can address a session by pane id. The in-app
-        # one is visible only to itself. Same switch as the
-        # CLAUDE_CODE_DISABLE_AGENT_VIEW environment variable.
-        disableAgentView = true;
-        # Plain attrset arithmetic, not mkMerge — this is fed straight to
-        # builtins.toJSON, where module-system combinators would serialise as
-        # garbage rather than merging.
-        hooks =
-          let
-            agentsOn = nixosCfg.features.fluteos.agents.enable;
-            # Agent status registry (features.fluteos.agents): every session
-            # reports its own state so the waybar widget can show what is
-            # running, what is blocked on you, and what is idle — across all
-            # workspaces. Observer only; never blocks a tool call.
-            agentHook = event: {
-              matcher = "";
-              hooks = [{
-                type = "command";
-                command = "fluteos-agent-hook ${event}";
-              }];
-            };
-            agentEvents = [ "SessionStart" "SessionEnd" "UserPromptSubmit" "PreToolUse" "Notification" ];
-          in
-          {
-            # Stop already carries the urgency notifier; the registry hook is
-            # appended so both run on turn end.
-            Stop = [{
-              matcher = "";
-              hooks = [{
-                type = "command";
-                command = "${claudeNotify}";
-              }];
-            }] ++ lib.optional agentsOn (agentHook "Stop");
-          }
-          # Each event maps to a LIST of matcher groups — genAttrs hands the
-          # bare attrset back, so wrap it.
-          // lib.optionalAttrs agentsOn (lib.genAttrs agentEvents (e: [ (agentHook e) ]));
-        # Read-only tools, plus the research MCP FluteOS registers itself. Kept in
-        # step with mcpServers: a permission for a server the product does not
-        # ship would be a permission for somebody else's account.
-        permissions.allow = [
-          "Read"
-          "WebFetch"
-          "WebSearch"
-        ] ++ lib.optionals (nixosCfg.features.fluteos.claude-code.mcpServers ? perplexity) [
-          "mcp__perplexity__perplexity_ask"
-          "mcp__perplexity__perplexity_search"
-          "mcp__perplexity__perplexity_research"
-          "mcp__perplexity__perplexity_reason"
-        ];
-      };
-
       # User-global skills, available in every session regardless of project.
       #
       # Only skills that document FluteOS itself ship here, all named fluteos-*
@@ -212,6 +152,15 @@ in
         import ./mcp-setup.nix {
           inherit lib pkgs;
           cfg = nixosCfg.features.fluteos.claude-code;
+        }
+      );
+
+      # ~/.claude/settings.json is written, not symlinked — see ./settings.nix.
+      # After linkGeneration so the symlink an earlier generation left there is
+      # already gone by the time the merge runs.
+      home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] (
+        import ./settings.nix {
+          inherit lib pkgs nixosCfg claudeNotify;
         }
       );
     };
