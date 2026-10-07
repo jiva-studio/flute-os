@@ -8,6 +8,8 @@
     { key = "h"; label = "Hibernate"; action = { exec = [ "systemctl" "hibernate" ]; }; }
     { key = "r"; label = "Reboot"; action = { exec = [ "systemctl" "reboot" ]; }; }
     { key = "q"; label = "Shutdown"; action = { exec = [ "systemctl" "poweroff" ]; }; }
+    { key = "l"; label = "Lock & Screen Off"; action = { exec = [ "sh" "-c" "swaylock -f && niri msg action power-off-monitors" ]; }; }
+    { key = "m"; label = "Screen Off"; action = { exec = [ "niri" "msg" "action" "power-off-monitors" ]; }; }
     { key = "1"; label = "Performance {status}";
       statusCmd = [ "sh" "-c" "fluteos-power-control is-profile performance && echo '[✓]' || echo ''" ];
       action = { exec = [ "fluteos-power-control" "profile-performance" ]; }; }

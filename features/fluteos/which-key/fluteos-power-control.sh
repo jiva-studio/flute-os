@@ -98,10 +98,10 @@ case "${1:-}" in
       "$NOTIFY_SEND" -h string:x-canonical-private-synchronous:caffeine \
         "Caffeine" "OFF"
     else
-      systemd-inhibit --what=sleep:idle --who="Caffeine" --why="User requested" \
+      systemd-inhibit --what=sleep:handle-lid-switch --who="Caffeine" --why="Keep system awake" \
         --mode=block sleep infinity &
       "$NOTIFY_SEND" -h string:x-canonical-private-synchronous:caffeine \
-        "Caffeine" "ON"
+        "Caffeine" "ON (System sleep inhibited, display sleep allowed)"
     fi
     ;;
   profile-*)
