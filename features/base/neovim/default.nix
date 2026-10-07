@@ -12,15 +12,7 @@
       # loading @vue/typescript-plugin. Without the plugin, vtsls parses the
       # whole .vue file as TypeScript and every tag becomes a syntax error.
       #
-      # nixpkgs builds the server with a pnpm whose version carries an
-      # advisory. It is a build-time package manager that never reaches the
-      # running system, so the flag is dropped here rather than opening
-      # permittedInsecurePackages for the whole configuration.
-      vue-language-server = pkgs.vue-language-server.override {
-        pnpm_10_34_0 = pkgs.pnpm_10_34_0.overrideAttrs (old: {
-          meta = builtins.removeAttrs old.meta [ "knownVulnerabilities" ];
-        });
-      };
+      vue-language-server = pkgs.vue-language-server;
       vueTypescriptPlugin = "${vue-language-server}/lib/language-tools/packages/language-server";
     in
     {

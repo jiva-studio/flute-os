@@ -126,6 +126,7 @@
       home.stateVersion = lib.mkDefault "26.05";
       programs.home-manager.enable = true;
       home.pointerCursor = {
+        enable = true;
         name = "Bibata-Modern-Classic";
         package = pkgs.bibata-cursors;
         size = 24;
