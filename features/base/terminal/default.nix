@@ -29,20 +29,5 @@
         --app-id.
       '';
     };
-
-    accentPaneTitle = lib.mkOption {
-      type = lib.types.str;
-      default = "";
-      example = "Orchestrator";
-      description = ''
-        Pane title that gets a translucent accent wash over the WezTerm
-        background, so that one window is findable among otherwise identical
-        ones. The title is the one set through OSC 1337 `tab_title` — i.e. what
-        the fish `set-tab-title` helper writes — and the match is exact.
-
-        Empty (the default) disables the tint: which window deserves to be
-        special is a workflow decision, not something the distribution knows.
-      '';
-    };
   };
 }

@@ -139,25 +139,6 @@ in
               overrides.window_padding = default_padding
             end
 
-            -- Accent window tint: the active pane whose title matches
-            -- features.base.terminal.accentPaneTitle exactly (a title set
-            -- explicitly via set-tab-title) gets a translucent mauve wash over
-            -- the base background, so it stands out among sibling windows.
-            -- Empty option = no title ever matches = feature off.
-            local accent_title = '${config.features.base.terminal.accentPaneTitle}'
-            local ap = window:active_pane()
-            local uv = ap and ap:get_user_vars() or {}
-            if #accent_title > 0 and uv.tab_title == accent_title then
-              -- Layers bypass window_background_opacity, so the base layer
-              -- carries the ~0.90 translucency itself; mauve is a thin wash.
-              overrides.background = {
-                { source = { Color = '#${c theme.palette.base}' },  width = '100%', height = '100%', opacity = 0.90 },
-                { source = { Color = '#${c theme.palette.mauve}' }, width = '100%', height = '100%', opacity = 0.12 },
-              }
-            else
-              overrides.background = nil
-            end
-
             window:set_config_overrides(overrides)
           end)
 
