@@ -139,6 +139,8 @@ in
               overrides.window_padding = default_padding
             end
 
+            overrides.background = nil
+
             window:set_config_overrides(overrides)
           end)
 
