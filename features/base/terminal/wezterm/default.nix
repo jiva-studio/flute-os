@@ -58,6 +58,7 @@ in
           config.window_decorations = "NONE"  -- Niri manages decorations
           config.window_padding = { left = 10, right = 10, top = 10, bottom = 10 }
           config.window_background_opacity = 0.90
+          config.text_background_opacity = 0.90
 
           -- Unix domain for persistent sessions (mux server)
           config.unix_domains = { { name = 'unix' } }
