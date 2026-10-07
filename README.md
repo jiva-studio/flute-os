@@ -66,7 +66,7 @@ CPU, memory, battery, network, volume, tray — are always there.
 | Window list (niri minimap) | `features.base.niri` |
 | MPD, with prev/next | `features.base.mpd` |
 | Obsidian tasks | `features.base.obsidian` |
-| Claude token usage, and agent status | `features.fluteos.claude-usage`, `features.fluteos.agents` |
+| AI plan usage, and agent status | `features.fluteos.ai-usage`, `features.fluteos.agents` |
 | Push-to-talk mode | `features.fluteos.ptt` |
 | Weather | `features.fluteos.weather` |
 | Tailnets connected | `features.fluteos.tailnets` |
@@ -136,7 +136,7 @@ flute-os/
 │   │   ├── workspaces/          # Niri workspace registry
 │   │   ├── ptt/                 # Push-to-talk dictation
 │   │   ├── tailnets/            # Userspace tailscaled per tailnet
-│   │   └── …                    # agents, claude-code, claude-usage, docs, opencode, …
+│   │   └── …                    # agents, ai-usage, claude-code, docs, opencode, …
 │   │
 │   └── darwin/                  # nix-darwin modules (options: features.darwin.*)
 │

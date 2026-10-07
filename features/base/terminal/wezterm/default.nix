@@ -86,6 +86,33 @@ in
               action = wezterm.action.SelectTextAtMouseCursor 'SemanticZone',
               mods = 'NONE',
             },
+
+            -- Wheel scrolls three lines, not whatever the compositor's delta
+            -- happens to be. The default action is ScrollByCurrentEventWheelDelta,
+            -- which forwards the raw wheel delta -- on a high-resolution wheel
+            -- that lands as a half-screen jump per notch. WezTerm has no smooth
+            -- or pixel-level scrolling to fall back on (upstream #3812 is open
+            -- and unimplemented), so a fixed, small line count is the only way
+            -- to make this readable.
+            --
+            -- Three matches alternate_buffer_wheel_scroll_speed's default, so
+            -- the scrollback and a pager feel the same under the same flick.
+            --
+            -- alt_screen = false is load-bearing: without it these bindings also
+            -- capture the wheel inside neovim, less and htop, where the wheel
+            -- must keep being translated into arrow keys for the application.
+            {
+              event = { Down = { streak = 1, button = { WheelUp = 1 } } },
+              action = wezterm.action.ScrollByLine(-3),
+              mods = 'NONE',
+              alt_screen = false,
+            },
+            {
+              event = { Down = { streak = 1, button = { WheelDown = 1 } } },
+              action = wezterm.action.ScrollByLine(3),
+              mods = 'NONE',
+              alt_screen = false,
+            },
           }
 
           -- Dynamic padding: remove when TUI app is active (neovim, htop, etc)

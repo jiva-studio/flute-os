@@ -55,6 +55,11 @@ in
 {
   options.features.base.nas = {
     enable = lib.mkEnableOption "NAS and Syncthing";
+    syncthing.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Run Syncthing. Off leaves the NFS auto-mounts in place.";
+    };
     nasHostname = lib.mkOption {
       type = lib.types.str;
       default = "";
@@ -166,40 +171,41 @@ in
       "d /mnt/nas 0755 root root -"
     ];
 
-    # Syncthing (Home Manager). Always enabled when feature is on; folders/devices
-    # come from cfg.{folders,devices} and may legitimately be empty.
-    home-manager.users.${config.features.base.system.user.name} = { config, ... }: {
-      services.syncthing = {
-        enable = true;
-        tray.enable = false;
-        settings = {
-          options = {
-            globalAnnounceEnabled = true;
-            localAnnounceEnabled = true;
-            relaysEnabled = true;
-            natEnabled = true;
-            urAccepted = -1;
+    # Syncthing (Home Manager). Folders/devices come from cfg.{folders,devices}
+    # and may legitimately be empty.
+    home-manager.users.${config.features.base.system.user.name} = { config, ... }:
+      lib.mkIf cfg.syncthing.enable {
+        services.syncthing = {
+          enable = true;
+          tray.enable = false;
+          settings = {
+            options = {
+              globalAnnounceEnabled = true;
+              localAnnounceEnabled = true;
+              relaysEnabled = true;
+              natEnabled = true;
+              urAccepted = -1;
+            };
+            devices = lib.mapAttrs (_: d: {
+              inherit (d) id autoAcceptFolders;
+            }) cfg.devices;
+            folders = lib.mapAttrs (_: f: {
+              path = "${config.home.homeDirectory}/${f.relPath}";
+              inherit (f) devices ignorePerms;
+            } // lib.optionalAttrs (f.versioning != null) { inherit (f) versioning; }) cfg.folders;
           };
-          devices = lib.mapAttrs (_: d: {
-            inherit (d) id autoAcceptFolders;
-          }) cfg.devices;
-          folders = lib.mapAttrs (_: f: {
-            path = "${config.home.homeDirectory}/${f.relPath}";
-            inherit (f) devices ignorePerms;
-          } // lib.optionalAttrs (f.versioning != null) { inherit (f) versioning; }) cfg.folders;
+          overrideDevices = true;
+          overrideFolders = true;
         };
-        overrideDevices = true;
-        overrideFolders = true;
-      };
 
-      # Per-folder .stignore: minimal default + per-folder extras.
-      # Projects folder gets the full build-artifact ignore list.
-      home.file = lib.mapAttrs' (_: f: {
-        name = "${f.relPath}/.stignore";
-        value.text =
-          (if isProjectsFolder f.relPath then defaultIgnoreLines else "**/@eaDir\n")
-          + lib.optionalString (f.extraIgnores != "") "\n${f.extraIgnores}";
-      }) cfg.folders;
-    };
+        # Per-folder .stignore: minimal default + per-folder extras.
+        # Projects folder gets the full build-artifact ignore list.
+        home.file = lib.mapAttrs' (_: f: {
+          name = "${f.relPath}/.stignore";
+          value.text =
+            (if isProjectsFolder f.relPath then defaultIgnoreLines else "**/@eaDir\n")
+            + lib.optionalString (f.extraIgnores != "") "\n${f.extraIgnores}";
+        }) cfg.folders;
+      };
   });
 }

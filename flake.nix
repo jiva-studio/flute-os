@@ -53,9 +53,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    catppuccin.url = "github:catppuccin/nix";
+    catppuccin = {
+      url = "github:catppuccin/nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
-    nur.url = "github:nix-community/NUR";
+    nur = {
+      url = "github:nix-community/NUR";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
@@ -121,7 +127,7 @@
           ./features/fluteos/which-key
           ./features/fluteos/ptt
           ./features/fluteos/claude-code
-          ./features/fluteos/claude-usage
+          ./features/fluteos/ai-usage
           ./features/fluteos/opencode
           ./features/fluteos/wallpapers
           ./features/fluteos/sessions
@@ -132,6 +138,7 @@
           ./features/fluteos/agent-context
           ./features/fluteos/waybar
           ./features/fluteos/tailnets
+          ./features/fluteos/recorder
         ];
 
         # Darwin-only feature modules (loaded only into darwinConfigurations).

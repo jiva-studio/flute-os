@@ -51,6 +51,23 @@ in
       '';
     };
 
+    extraWindowRules = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      example = ''
+        window-rule {
+            match app-id="com.example.Thing"
+            open-floating true
+        }
+      '';
+      description = ''
+        Extra niri `window-rule` blocks, in KDL, appended to the product's set.
+        A feature that ships a window of its own says how it should be placed
+        here, rather than the compositor's rule file having to know about every
+        feature that might be switched on.
+      '';
+    };
+
     keyboard = {
       layout = lib.mkOption {
         type = lib.types.str;
@@ -195,6 +212,7 @@ in
         ${layoutConfig}
         ${startupConfig}
         ${windowRulesConfig}
+        ${cfg.extraWindowRules}
         ${keybindingsConfig}
       '';
     in
