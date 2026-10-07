@@ -12,7 +12,8 @@
 # claiming to be one — only the dark-mode preference still applies.
 { lib, config, ... }:
 let
-  ctp = config.features.fluteos.theme.resolved.catppuccin;
+  theme = config.features.fluteos.theme.resolved;
+  ctp = theme.catppuccin;
   themeName = "catppuccin-${ctp.flavor}-${ctp.accent}-standard";
   # Papirus' own icons; only the folder hue comes from the palette.
   iconThemeName = "Papirus-Dark";
@@ -26,6 +27,10 @@ in
     home-manager.users.${config.features.base.system.user.name} = { pkgs, ... }: {
       gtk = {
         enable = true;
+        font = {
+          name = theme.fonts.sans;
+          size = theme.fonts.size.normal;
+        };
         gtk3.extraConfig = { gtk-application-prefer-dark-theme = true; };
         gtk4.extraConfig = { gtk-application-prefer-dark-theme = true; };
       } // lib.optionalAttrs (ctp != null) {
@@ -48,6 +53,9 @@ in
       dconf.settings = {
         "org/gnome/desktop/interface" = {
           color-scheme = "prefer-dark";
+          font-name = "${theme.fonts.sans} ${toString theme.fonts.size.normal}";
+          document-font-name = "${theme.fonts.sans} ${toString theme.fonts.size.normal}";
+          monospace-font-name = "${theme.fonts.mono} ${toString theme.fonts.size.normal}";
         } // lib.optionalAttrs (ctp != null) {
           gtk-theme = themeName;
           icon-theme = iconThemeName;

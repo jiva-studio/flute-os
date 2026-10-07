@@ -39,6 +39,23 @@ in
     "extensions.autoDisableScopes" = 0;
     "extensions.enabledScopes" = 15;
 
+    # Fonts
+    "font.default.x-western" = "sans-serif";
+    "font.default.x-cyrillic" = "sans-serif";
+    "font.default.x-unicode" = "sans-serif";
+    "font.name.sans-serif.x-western" = "Noto Sans";
+    "font.name.sans-serif.x-cyrillic" = "Noto Sans";
+    "font.name.sans-serif.x-unicode" = "Noto Sans";
+    "font.name.serif.x-western" = "Noto Serif";
+    "font.name.serif.x-cyrillic" = "Noto Serif";
+    "font.name.serif.x-unicode" = "Noto Serif";
+    "font.name.monospace.x-western" = "JetBrainsMono Nerd Font";
+    "font.name.monospace.x-cyrillic" = "JetBrainsMono Nerd Font";
+    "font.name.monospace.x-unicode" = "JetBrainsMono Nerd Font";
+    "font.name-list.system-ui.x-western" = "Noto Sans, sans-serif";
+    "font.name-list.system-ui.x-cyrillic" = "Noto Sans, sans-serif";
+    "font.name-list.system-ui.x-unicode" = "Noto Sans, sans-serif";
+
     # Session persistence - keep logged in between browser restarts
     "network.cookie.lifetimePolicy" = 0;           # 0 = keep cookies until they expire naturally
     "privacy.clearOnShutdown.cookies" = false;     # don't clear cookies on exit
