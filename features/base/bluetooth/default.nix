@@ -24,7 +24,10 @@ in
       powerOnBoot = true;
       settings = {
         General = {
-          Experimental = true;
+          FastConnectable = true;
+          JustWorksRepairing = "always";
+          ReconnectAttempts = 7;
+          ReconnectIntervals = "1, 2, 4, 8, 16, 32, 64";
         };
         Policy = {
           AutoEnable = true;
@@ -33,14 +36,6 @@ in
     };
 
     services.blueman.enable = true;
-
-    # MT7921 fully re-initializes its firmware on every s2idle resume, leaving
-    # bluetoothd with stale HoG/HID handles. Restarting the service realigns
-    # daemon state with the freshly-reset controller so HID devices reconnect
-    # without manual rfkill toggling.
-    powerManagement.resumeCommands = ''
-      ${pkgs.systemd}/bin/systemctl restart bluetooth.service || true
-    '';
 
     # Declarative Bluetooth pairings (if adapterMac is set)
     systemd.services.bluetooth-pairings = lib.mkIf (cfg.adapterMac != "") (let
