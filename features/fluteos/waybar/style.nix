@@ -99,10 +99,16 @@ in
   #clock { ${styles.chip theme.palette.blue} }
   #tray { ${styles.chip theme.palette.mauve} }
   #custom-obsidian { ${styles.chip theme.palette.peach} }
-  #custom-claude { ${styles.chip theme.palette.yellow} }
+  #custom-ai { ${styles.chip theme.palette.yellow} }
   /* Tailnet switcher — lavender sits between clock (blue) and tray (mauve) to
      keep the right-side catppuccin gradient flowing (…sapphire→blue→lavender→mauve). */
   #custom-tailnet { ${styles.chip theme.palette.lavender} }
+  /* Meeting recorder — the last chip on the bar, so it takes the next hue after
+     the tray's mauve and the gradient runs to the edge: …lavender→mauve→pink.
+     One background in every state, like the agent chip: state is carried by the
+     glyph, because a chip that turns red for an hour turns the bar into a
+     warning light. */
+  #custom-recorder { ${styles.chip theme.palette.pink} }
   #custom-mpd { ${styles.chip theme.palette.red} }
 
   #cpu,
@@ -115,9 +121,10 @@ in
     margin: 0;
   }
 
-  /* Claude agents share the usage chip. Its background stays yellow in every
-     state by design — the bar's colours belong to the layout, not to runtime
-     status. Agent state is carried by the coloured dots in the text instead. */
+  /* Agents share the quota chip. Its background stays yellow in every state by
+     design — the bar's colours belong to the layout, not to runtime status.
+     Agent state is carried by the coloured dots in the text instead, and each
+     provider's number is plain for the same reason. */
 
   /* PTT Mode widget. Background lives on the base rule, not per-mode, so a new
      mode inherits it instead of rendering as a transparent gap. */

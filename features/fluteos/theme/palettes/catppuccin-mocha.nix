@@ -55,6 +55,8 @@
   ink = {
     blue = "#1e66f5";
     green = "#40a02b";
+    red = "#d20f39";
+    amber = "#df8e1d";
     neutral = "#4c4f69";
     dim = "#8c8fa1";
   };
