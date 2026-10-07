@@ -119,23 +119,24 @@ alwaysModules
   };
 }
 
-# features.fluteos.claude-usage — token usage plus, when features.fluteos.agents
-# is on, the status of every Claude agent across all workspaces in one chip. The
-# agent half reads a hook-written registry, so the poll only needs to be fast
-# enough to feel live; the usage half is cached behind its own TTL inside the
-# script and is not refetched at this rate.
-# RTMIN+13 forces an immediate redraw (sent by fluteos-ai-usage-toggle).
-// lib.optionalAttrs has.claudeUsage {
-  "custom/claude" = {
-    exec = "fluteos-claude-usage";
+# features.fluteos.ai-usage — what is left on every AI plan plus, when
+# features.fluteos.agents is on, the status of every agent across all
+# workspaces in one chip. The agent half reads a hook-written registry, so the
+# poll only needs to be fast enough to feel live; the quota half is cached
+# behind its own TTL inside the script and is not refetched at this rate.
+# RTMIN+13 forces an immediate redraw.
+// lib.optionalAttrs has.aiUsage {
+  "custom/ai" = {
+    exec = "fluteos-ai-usage";
     return-type = "json";
     # One second, not two: the "an agent is waiting for you" dot blinks by
     # alternating its colour between polls, and at 2s that reads as a glitch
-    # rather than a blink. The usage half is cached behind its own TTL inside
+    # rather than a blink. The quota half is cached behind its own TTL inside
     # the script, so this does not refetch anything.
-    interval = 1;
+    interval = 3;
     signal = 13;
-    on-click = "fluteos-ai-usage-toggle";
+    # No on-click: every provider is on the bar at once, so there is nothing
+    # left to switch between. The clicks below belong to the agent half.
   } // lib.optionalAttrs has.agents {
     on-click-right = "fluteos-agents-pick";
     # "Seen them all, stop blinking." Focusing an agent's window clears its own
@@ -144,23 +145,31 @@ alwaysModules
   };
 }
 
-# features.fluteos.ptt
-// lib.optionalAttrs has.ptt {
-  "custom/ptt-mode" = {
-    exec = "fluteos-ptt-widget";
+# features.fluteos.recorder — records the meeting you are in, then sends it for
+# transcription. The poll is slow because the chip only shows minutes; every
+# state CHANGE arrives immediately via RTMIN+14, which fluteos-record and the
+# transcriber both raise. When nothing is being recorded the widget answers from
+# two file checks, so this costs nothing at rest.
+// lib.optionalAttrs has.recorder {
+  "custom/recorder" = {
+    exec = "fluteos-recorder-widget";
     return-type = "json";
-    interval = "once";
-    signal = 11;
-    on-click = "fluteos-ptt-toggle";
+    interval = 10;
+    signal = 14;
+    # Start (asking for a label) / stop-and-transcribe.
+    on-click = "fluteos-record toggle --prompt";
+    on-click-middle = "fluteos-record pause-toggle";
+    on-click-right = "fluteos-record open";
   };
 }
+
 
 # features.base.mpd — mpd-status, mpc and ncmpcpp all come with the feature.
 // lib.optionalAttrs has.mpd {
   "custom/mpd" = {
     exec = "mpd-status";
     return-type = "json";
-    interval = 1;
+    interval = 3;
     on-click = "mpc toggle";
     on-scroll-up = "mpc next";
     on-scroll-down = "mpc prev";

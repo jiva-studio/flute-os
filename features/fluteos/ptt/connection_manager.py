@@ -128,8 +128,35 @@ class ConnectionManager:
 
         self._start_connection()
 
+    def _is_current(self, ws):
+        """Is this callback coming from the connection we are actually using?
+
+        WebSocketApp callbacks carry the socket they belong to, and a superseded
+        socket keeps firing them for as long as its TCP connection survives. It
+        must not be allowed to touch shared state — see _start_connection.
+        """
+        return ws is self.ws
+
     def _start_connection(self):
         """Start WebSocket connection in background thread."""
+        # Retire the previous socket first.
+        #
+        # WebSocketApp.run_forever() keeps running until its socket closes, so
+        # simply overwriting self.ws abandoned a live TCP connection to
+        # Deepgram. The abandoned one received no KeepAlive — those are sent to
+        # self.ws, which by then was the NEW socket — so Deepgram closed it
+        # after ~10s with NET-0001, and its on_close dragged the healthy
+        # connection's state to DISCONNECTED and asked for yet another
+        # reconnect. That reconnect abandoned the healthy socket in turn: one
+        # dead socket every ten seconds, for as long as the daemon ran, with
+        # four connections open at once on an idle machine.
+        old = self.ws
+        if old is not None:
+            try:
+                old.close()
+            except Exception as e:
+                print(f"Retiring previous connection: {e}", flush=True)
+
         self.ws = websocket.WebSocketApp(
             stt_ws_url(self.stt),
             header=stt_auth_header(self.stt, self.api_key),
@@ -151,6 +178,14 @@ class ConnectionManager:
 
     def _on_open(self, ws):
         """Handle WebSocket connection established."""
+        if not self._is_current(ws):
+            # A connection we already gave up on, arriving late.
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return
+
         print("WebSocket connected to Deepgram", flush=True)
         self._set_state(ConnectionState.CONNECTED)
         self._connected_event.set()
@@ -158,25 +193,34 @@ class ConnectionManager:
         self._last_activity_time = time.time()
 
         # Start KeepAlive loop
-        self._start_keepalive()
+        self._start_keepalive(ws)
 
         if self.on_connected:
             self.on_connected()
 
     def _on_message(self, ws, message):
         """Handle incoming message from Deepgram."""
+        if not self._is_current(ws):
+            return
         self._last_activity_time = time.time()
         if self.on_message:
             self.on_message(message)
 
     def _on_error(self, ws, error):
         """Handle WebSocket error."""
+        if not self._is_current(ws):
+            # Expected: a retired socket being closed, or timing out because we
+            # stopped feeding it. Not the user's problem, and emphatically not
+            # grounds for reporting the live connection as broken.
+            return
         print(f"WebSocket error: {error}", flush=True)
         if self.on_error:
             self.on_error(error)
 
     def _on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection closed."""
+        if not self._is_current(ws):
+            return
         print(f"WebSocket closed: {close_status_code} {close_msg}", flush=True)
 
         was_connected = self.state in (ConnectionState.CONNECTED, ConnectionState.STREAMING)
@@ -190,20 +234,29 @@ class ConnectionManager:
         if was_connected and not self._should_stop.is_set():
             self._attempt_reconnect()
 
-    def _start_keepalive(self):
-        """Start KeepAlive thread."""
-        if self._keepalive_thread and self._keepalive_thread.is_alive():
-            return
-
-        self._keepalive_thread = threading.Thread(target=self._keepalive_loop, daemon=True)
+    def _start_keepalive(self, ws):
+        """Start a KeepAlive thread bound to one connection."""
+        self._keepalive_thread = threading.Thread(
+            target=self._keepalive_loop, args=(ws,), daemon=True
+        )
         self._keepalive_thread.start()
 
-    def _keepalive_loop(self):
-        """Send KeepAlive messages while connected and not streaming."""
+    def _keepalive_loop(self, ws):
+        """Send KeepAlive messages while connected and not streaming.
+
+        Bound to the socket it was started for, and it sends to THAT socket
+        rather than to whatever self.ws currently points at. A loop left over
+        from a previous connection would otherwise keep one socket alive while
+        the connection it was started for went unfed and was hung up on.
+        """
         while not self._should_stop.is_set():
             time.sleep(KEEPALIVE_INTERVAL)
 
             if self._should_stop.is_set():
+                break
+
+            # This connection has been superseded; its own loop stops with it.
+            if not self._is_current(ws):
                 break
 
             with self._state_lock:
@@ -220,8 +273,8 @@ class ConnectionManager:
 
                 # Send KeepAlive
                 try:
-                    if self.ws and self.ws.sock:
-                        self.ws.send(json.dumps({"type": "KeepAlive"}))
+                    if ws.sock:
+                        ws.send(json.dumps({"type": "KeepAlive"}))
                         print("KeepAlive sent", flush=True)
                 except Exception as e:
                     print(f"KeepAlive send error: {e}", flush=True)
@@ -239,8 +292,16 @@ class ConnectionManager:
             print(f"Max reconnect attempts ({MAX_RECONNECT_ATTEMPTS}) exceeded", flush=True)
             return
 
-        print(f"Reconnecting (attempt {self._reconnect_count}/{MAX_RECONNECT_ATTEMPTS})...", flush=True)
-        time.sleep(1.0)  # Brief delay before reconnect
+        # Back off between attempts (1s, 2s, 4s). A fixed one-second retry is
+        # fine against a hiccup and wrong against an outage, where it just
+        # hammers a service that is already saying no.
+        delay = 2 ** (self._reconnect_count - 1)
+        print(
+            f"Reconnecting in {delay}s "
+            f"(attempt {self._reconnect_count}/{MAX_RECONNECT_ATTEMPTS})...",
+            flush=True,
+        )
+        time.sleep(delay)
 
         if not self._should_stop.is_set():
             self._set_state(ConnectionState.CONNECTING)

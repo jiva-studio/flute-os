@@ -22,9 +22,9 @@ let
     niri = base.niri.enable;                # cffi minimap talks to the niri IPC
     mpd = base.mpd.enable;                  # mpd-status, mpc, ncmpcpp
     obsidian = base.obsidian.enable;        # obsidian-tasks, obsidian-task-*
-    claudeUsage = flute.claude-usage.enable; # fluteos-claude-usage, -ai-usage-toggle
+    aiUsage = flute.ai-usage.enable;        # fluteos-ai-usage
     agents = flute.agents.enable;           # fluteos-agents-pick
-    ptt = flute.ptt.enable;                 # fluteos-ptt-widget, -ptt-toggle
+    recorder = flute.recorder.enable;       # fluteos-recorder-widget, fluteos-record
     weather = flute.weather.enable;         # fluteos-weather
     tailnets = flute.tailnets.enable;       # fluteos-tailnet-watch, -tailnet-menu
     audio = base.audio.enable;              # wpctl (pipewire/wireplumber)
@@ -131,13 +131,16 @@ in
       default =
         lib.optionals (hasGroup "player") [ "group/player" ]
         ++ lib.optionals (hasGroup "tasks") [ "group/tasks" ]
-        ++ lib.optionals has.claudeUsage [ "custom/claude" ]
+        ++ lib.optionals has.aiUsage [ "custom/ai" ]
         ++ lib.optionals (hasGroup "status") [ "group/status" ]
-        ++ lib.optionals has.ptt [ "custom/ptt-mode" ]
         ++ lib.optionals has.weather [ "custom/weather" ]
         ++ [ "clock" ]
         ++ lib.optionals has.tailnets [ "custom/tailnet" ]
-        ++ [ "tray" ];
+        ++ [ "tray" ]
+        # Last chip on the bar. The right side runs as one catppuccin gradient
+        # (…blue → lavender → mauve), so anything added here continues it
+        # rather than sitting in the middle of it — see waybar/style.nix.
+        ++ lib.optionals has.recorder [ "custom/recorder" ];
       defaultText = lib.literalMD "derived from the enabled features";
       description = "Waybar `modules-right`. Module names, including `group/<name>` from `groups`.";
     };

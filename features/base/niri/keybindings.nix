@@ -39,6 +39,9 @@ in
       ${mod}+Shift+R { switch-preset-window-height; }
       ${mod}+C { center-column; }
       ${mod}+W { toggle-column-tabbed-display; }
+      // Floating: ${mod}+V is push-to-talk, so niri's default Mod+V is shifted.
+      ${mod}+Shift+V { toggle-window-floating; }
+      ${mod}+Ctrl+V { switch-focus-between-floating-and-tiling; }
 
       // Focus
       ${mod}+Left { focus-column-or-monitor-left; }
@@ -120,11 +123,6 @@ in
       ${optionalBind hasMpd ''XF86AudioNext allow-when-locked=true { spawn "mpc" "next"; }''}
       ${optionalBind hasMpd ''XF86AudioPrev allow-when-locked=true { spawn "mpc" "prev"; }''}
       ${optionalBind hasMpd ''XF86AudioStop allow-when-locked=true { spawn "mpc" "stop"; }''}
-
-      // Push-to-talk: cycle to the next dictation mode. `ptt.toggle` is the
-      // cycle script — it used to be the daemon, so this key started a second
-      // one that fought the first for the input devices.
-      ${if config ? ptt && config ? ptt.toggle then ''${mod}+V { spawn "${config.ptt.toggle}"; }'' else "// ptt not enabled"}
 
       // Window tags (focus)
       Alt+1 { spawn "niri-tags" "focus" "1"; }
