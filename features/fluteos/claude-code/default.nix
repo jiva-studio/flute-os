@@ -16,7 +16,7 @@ let
   cfg = config.features.fluteos.claude-code;
 in
 {
-  imports = [ ./options.nix ];
+  imports = [ ./options.nix ./accounts.nix ];
 
   config = lib.mkIf cfg.enable {
     # --- What FluteOS itself registers -------------------------------------
@@ -94,6 +94,17 @@ in
           if [ -s "$OP_TOKEN_FILE" ]; then
             export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$OP_TOKEN_FILE")"
           fi
+
+          # A group bound to another Claude login (./accounts.nix) runs there.
+          ${lib.optionalString (lib.any (a: a.groups != [ ]) (lib.attrValues cfg.accounts)) ''
+          if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
+            case "''${WORKSPACE_GROUP:-}" in
+              ${lib.concatStrings (lib.mapAttrsToList (_: a: lib.optionalString (a.groups != [ ]) ''
+              ${lib.concatMapStringsSep "|" lib.escapeShellArg a.groups}) export CLAUDE_CONFIG_DIR=${lib.escapeShellArg a.dir} ;;
+              '') cfg.accounts)}
+            esac
+          fi
+          ''}
 
           # Workspace-aware launch: when run inside a project (WORKSPACE_AGENT_DIR set
           # and the directory exists), cd into agent/ so .claude/skills and CLAUDE.md
