@@ -5,6 +5,14 @@
   options.features.base.terminal = {
     enable = lib.mkEnableOption "Terminal emulator (WezTerm)";
 
+    opacity = lib.mkOption {
+      type = lib.types.numbers.between 0.0 1.0;
+      default = 1.0;
+      description = ''
+        Window background opacity (1.0 = fully opaque).
+      '';
+    };
+
     spawnCommand = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ "wezterm" "start" "--always-new-process" ];
