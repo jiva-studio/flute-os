@@ -170,7 +170,7 @@ in
         wantedBy = [ "multi-user.target" ];
         serviceConfig = {
           Type = "simple";
-          ExecStart = "${pkgs.tun2socks}/bin/tun2socks -device tun://${dev} -proxy socks5://127.0.0.1:${toString net.socksPort}";
+          ExecStart = "${pkgs.tun2socks}/bin/tun2socks --device tun://${dev} --proxy socks5://127.0.0.1:${toString net.socksPort}";
           ExecStartPost = "${up}";
           ExecStopPost = "${down}";
           # tun2socks keeps running even while its SOCKS5 (a user service that
